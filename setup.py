@@ -25,7 +25,6 @@ with open(path.join(here, 'HISTORY.rst'), encoding='utf-8') as history_file:
 requirements = [
     'requests>=2.0',
     'click',
-    'graypy',
     'PlexAPI'
 ]
 

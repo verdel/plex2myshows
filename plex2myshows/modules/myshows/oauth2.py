@@ -3,22 +3,11 @@ from urllib import quote
 from urlparse import parse_qs
 import pickle
 from datetime import datetime
+from .exceptions import MyshowsOAuth2CommonError, MyshowsOAuth2CodeError, MyshowsOAuth2TokenError
 try:
     import simplejson as json
 except ImportError:
     import json
-
-
-class MyshowsOAuth2Error(Exception):
-    """Root exception for all errors related to this library"""
-
-
-class AuthError(MyshowsOAuth2Error):
-    """An error occurred while performing a connection to the server"""
-
-
-class CacheError(MyshowsOAuth2Error):
-    """An error occurred while performing a connection to the server"""
 
 
 class OAuth2(object):
@@ -42,17 +31,20 @@ class OAuth2(object):
             self.token_path = token_path
 
     def get_token(self):
+        """
+        Get an access token from cache or api
+        """
         try:
             with open(self.token_path, 'r') as token_file:
                 token = pickle.load(token_file)
-        except Exception:
+        except IOError:
             token = {}
         keys = ('access_token', 'creation_at', 'expires_in', 'refresh_token')
         if all(key in token for key in keys):
             if (datetime.now() - token['creation_at']).seconds < int(token['expires_in']):
                 token = token['access_token']
             else:
-                token = self.__refresh_token(token['refresh_token'])
+                token = self.__refresh_token_from_url(token['refresh_token'])
         else:
             token = self.__get_token_from_url()
 
@@ -60,13 +52,13 @@ class OAuth2(object):
 
     def __get_token_from_url(self, **kwargs):
         """
-        Requests an access token
+        Requests an access token from api
         """
-        authorization_url = "%s%s" % (self.site, quote(self.authorization_url))
-        token_url = "%s%s" % (self.site, quote(self.token_url))
+        authorization_url = '{}{}'.format(self.site, quote(self.authorization_url))
+        token_url = '{}{}'.format(self.site, quote(self.token_url))
 
         if not self.auth_code:
-            raise AuthError('Please visit url {}?response_type=code&client_id={}&scope=basic and set --myshows-auth-code option.'.format(authorization_url, self.client_id))
+            raise MyshowsOAuth2CodeError('Please visit url {}?response_type=code&client_id={}&scope=basic and set --myshows-auth-code option.'.format(authorization_url, self.client_id))
 
         data = {'client_id': self.client_id, 'client_secret': self.client_secret, 'grant_type': 'authorization_code', 'code': self.auth_code}
         data.update(kwargs)
@@ -81,19 +73,22 @@ class OAuth2(object):
             content = response.content
 
         if 'access_token' in content:
-            with open(self.token_path, 'w+') as token_file:
-                pickle.dump({'access_token': content['access_token'], 'creation_at': datetime.now(), 'expires_in': content['expires_in'], 'refresh_token': content['refresh_token']}, token_file)
-                return content['access_token']
+            try:
+                with open(self.token_path, 'w+') as token_file:
+                    pickle.dump({'access_token': content['access_token'], 'creation_at': datetime.now(), 'expires_in': content['expires_in'], 'refresh_token': content['refresh_token']}, token_file)
+                    return content['access_token']
+            except IOError as exc:
+                raise MyshowsOAuth2CommonError('[OAuth2 cache error] {}'.format(exc))
         elif 'error_description' in content and content['error_description'] == u"Authorization code doesn't exist or is invalid for the client":
-            raise AuthError('Please visit url {}?response_type=code&client_id={}&scope=basic and set --myshows-auth-code option.'.format(authorization_url, self.client_id))
+            raise MyshowsOAuth2CodeError('Please visit url {}?response_type=code&client_id={}&scope=basic and set --myshows-auth-code option.'.format(authorization_url, self.client_id))
         else:
-            raise AuthError(content)
+            raise MyshowsOAuth2TokenError('[OAuth2 error] {}'.format(content))
 
-    def __refresh_token(self, refresh_token):
+    def __refresh_token_from_url(self, refresh_token):
         """
-        Requests an access token
+        Refresh an access token with api
         """
-        url = "%s%s" % (self.site, quote(self.token_url))
+        url = '{}{}'.format(self.site, quote(self.token_url))
         data = {'client_id': self.client_id, 'client_secret': self.client_secret, 'grant_type': 'refresh_token', 'refresh_token': refresh_token}
         response = requests.post(url, data=data)
 
@@ -106,8 +101,11 @@ class OAuth2(object):
             content = response.content
 
         if 'access_token' in content:
-            with open(self.token_path, 'w+') as token_file:
-                pickle.dump({'access_token': content['access_token'], 'creation_at': datetime.now(), 'expires_in': content['expires_in'], 'refresh_token': content['refresh_token']}, token_file)
-                return content['access_token']
+            try:
+                with open(self.token_path, 'w+') as token_file:
+                    pickle.dump({'access_token': content['access_token'], 'creation_at': datetime.now(), 'expires_in': content['expires_in'], 'refresh_token': content['refresh_token']}, token_file)
+                    return content['access_token']
+            except IOError as exc:
+                raise MyshowsOAuth2CommonError('[OAuth2 cache error] {}'.format(exc))
         else:
-            raise AuthError(content)
+            raise MyshowsOAuth2TokenError('[OAuth2 error] {}'.format(content))

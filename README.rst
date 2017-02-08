@@ -2,10 +2,4 @@
 Plex to MyShows.me sync
 ===============================
 
-It is a simple NOC IPAM CLI HTTP client that uses Python requests module. 
-
-Features
---------
-
-Usage
------
+Tool for sync watched episodes from Plex Media Server to http://myshows.me. It use APIv2 JSON-RPC with OAuth2

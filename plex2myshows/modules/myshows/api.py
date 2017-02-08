@@ -1,33 +1,22 @@
 import requests
 import random
 import sys
-import json
-from modules.requests_oauth2 import OAuth2
-
-
-class MyshowsAPIError(Exception):
-    """Root exception for all errors related to this library"""
-
-
-class TransportError(MyshowsAPIError):
-    """An error occurred while performing a connection to the server"""
-
-
-class AuthError(MyshowsAPIError):
-    """An error occurred while performing a connection to the server"""
-
-
-class ProtocolError(MyshowsAPIError):
-    """An error occurred while dealing with the JSON-RPC protocol"""
+try:
+    import simplejson as json
+except ImportError:
+    import json
+from .oauth2 import OAuth2
+from .exceptions import TransportError, ProtocolError, AuthError
 
 
 class MyShows(object):
-    def __init__(self, url, oauth2_url, client_id, client_secret, auth_code):
-        self.url = url
+    def __init__(self, api_url, oauth2_url, client_id, client_secret, auth_code):
+        self.api_url = api_url
         token_handler = OAuth2(client_id, client_secret, oauth2_url, auth_code)
-        self.token = token_handler.get_token()
-        if not self.token:
-            raise AuthError("Can`t get Myshows APIv2 auth token")
+        try:
+            self.token = token_handler.get_token()
+        except Exception as exc:
+            raise AuthError('[OAuth2 error] Can`t get Myshows APIv2 auth token. {}'.format(exc))
 
     def serialize(self, method_name, params):
         """Generate the raw JSON message to be sent to the server"""
@@ -36,7 +25,7 @@ class MyShows(object):
             data['params'] = params
             # some JSON-RPC servers complain when receiving str(uuid.uuid4()). Let's pick something simpler.
             data['id'] = random.randint(1, sys.maxsize)
-        return json.dumps(data)
+            return json.dumps(data)
 
     def send_request(self, method_name, params):
         """Issue the HTTP request to the server and return the method result (if not a notification)"""
@@ -44,31 +33,30 @@ class MyShows(object):
         request_body = self.serialize(method_name, params)
 
         try:
-            response = requests.post(self.url, data=request_body, headers=request_head)
+            response = requests.post(self.api_url, data=request_body, headers=request_head)
         except requests.RequestException as requests_exception:
-            raise TransportError('Error calling method %r' % method_name, requests_exception)
+            raise TransportError('[API error] Error calling method {}'.format(method_name), requests_exception)
 
         if response.status_code != requests.codes.ok:
-            raise TransportError(response.status_code)
+            raise TransportError('[API error] {}'.format(response.status_code))
 
         try:
             parsed = response.json()
         except ValueError as value_error:
-            raise TransportError('Cannot deserialize response body', value_error)
-
+            raise TransportError('[API error] Cannot deserialize response body', value_error)
         return self.parse_result(parsed)
 
     @staticmethod
     def parse_result(result):
         """Parse the data returned by the server according to the JSON-RPC spec. Try to be liberal in what we accept."""
         if not isinstance(result, dict):
-            raise ProtocolError('Response is not a dictionary')
+            raise ProtocolError('[API error] Response is not a dictionary')
         if result.get('error'):
             code = result['error'].get('code', '')
             message = result['error'].get('message', '')
-            raise ProtocolError(code, message, result)
+            raise ProtocolError('[API error] {}'.format(code), message, result)
         elif 'result' not in result:
-            raise ProtocolError('Response without a result field')
+            raise ProtocolError('[API error] Response without a result field')
         else:
             return result['result']
 

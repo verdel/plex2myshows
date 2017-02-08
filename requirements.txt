@@ -1,4 +1,3 @@
 requests>=2.0
 click
-graypy
 PlexAPI
