@@ -2,9 +2,21 @@
 
 import click
 import sys
+import logging
+import logging.handlers
 from plexapi.server import PlexServer
 from modules.plex import Plex
 from modules.myshows import MyShows
+
+log = logging.getLogger('plex2myshows')
+log.setLevel(logging.INFO)
+if sys.platform == "linux" or sys.platform == "linux2":
+    handler = logging.handlers.SysLogHandler('/dev/log')
+elif sys.platform == "darwin":
+    handler = logging.handlers.SysLogHandler(address='/var/run/syslog')
+formatter = logging.Formatter('%(name)s: [%(levelname)s] %(message)s')
+handler.formatter = formatter
+log.addHandler(handler)
 
 
 @click.command(help='Sync watched series episodes from Plex Media Server to MyShows.me')
@@ -47,12 +59,14 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url,
         myshows = MyShows(myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code)
     except Exception as exc:
         print(exc)
+        log.error(exc)
         sys.exit(1)
 
     try:
         plex_instance = PlexServer(plex_url, plex_token)
     except:
         print('No Plex Media Server found at {}'.format(plex_url))
+        log.error(exc)
         sys.exit(1)
 
     plex = Plex(plex_instance)
@@ -72,22 +86,35 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url,
                                 print('{} season {} episode {} will mark as watched'.format(info['series_title'],
                                                                                             info['season'],
                                                                                             info['episode']))
+                                log.info('{} season {} episode {} will mark as watched'.format(info['series_title'],
+                                                                                               info['season'],
+                                                                                               info['episode']))
                             else:
                                 print('Episode with id {} not found'.format(episode_id))
+                                log.warning('Episode with id {} not found'.format(episode_id))
                         else:
                             if myshows.mark_episode_as_watch(episode_id):
                                 print('{} season {} episode {} mark as watched'.format(info['series_title'],
                                                                                        info['season'],
                                                                                        info['episode']))
+                                log.info('{} season {} episode {} mark as watched'.format(info['series_title'],
+                                                                                          info['season'],
+                                                                                          info['episode']))
                 else:
                     print('{} season {} episode {} not found'.format(entry.grandparentTitle,
                                                                      entry.parentIndex,
                                                                      entry.index))
+                    log.warning('{} season {} episode {} not found'.format(entry.grandparentTitle,
+                                                                           entry.parentIndex,
+                                                                           entry.index))
+
             else:
                 print('Series {} not found'.format(entry.grandparentTitle))
+                log.warning('Series {} not found'.format(entry.grandparentTitle))
 
     except Exception as exc:
         print(exc)
+        log.error(exc)
         sys.exit(1)
 
 
