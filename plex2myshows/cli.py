@@ -49,14 +49,17 @@ log.addHandler(handler)
 @click.option('--myshows-auth-code',
               required=False,
               help='MyShows.Me OAuth2 authorization code')
+@click.option('--myshows-token-path',
+              required=False,
+              help='MyShows.Me OAuth2 token store path')
 @click.option('--what-if',
               default=False,
               metavar='<boolean>',
               is_flag=True,
               help='No sync only show episodes')
-def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code, what_if):
+def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code, myshows_token_path, what_if):
     try:
-        myshows = MyShows(myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code)
+        myshows = MyShows(myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code, myshows_token_path)
     except Exception as exc:
         print(exc)
         log.error(exc)

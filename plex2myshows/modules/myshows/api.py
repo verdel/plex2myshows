@@ -10,9 +10,9 @@ from .exceptions import TransportError, ProtocolError, AuthError
 
 
 class MyShows(object):
-    def __init__(self, api_url, oauth2_url, client_id, client_secret, auth_code):
+    def __init__(self, api_url, oauth2_url, client_id, client_secret, auth_code, token_path=None):
         self.api_url = api_url
-        token_handler = OAuth2(client_id, client_secret, oauth2_url, auth_code)
+        token_handler = OAuth2(client_id, client_secret, oauth2_url, auth_code, token_path=token_path)
         try:
             self.token = token_handler.get_token()
         except Exception as exc:
