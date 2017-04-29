@@ -28,7 +28,7 @@ class OAuth2(object):
         if token_url is not None:
             self.token_url = token_url
         if token_path is not None:
-            self.token_path = token_path
+            self.token_path = '{}/.myshows_token'.format(token_path)
 
     def get_token(self):
         """

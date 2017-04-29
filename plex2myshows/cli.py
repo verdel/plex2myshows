@@ -2,6 +2,7 @@
 
 import click
 import sys
+import pickle
 import logging
 import logging.handlers
 from plexapi.server import PlexServer
@@ -17,7 +18,6 @@ elif sys.platform == "darwin":
 formatter = logging.Formatter('%(name)s: [%(levelname)s] %(message)s')
 handler.formatter = formatter
 log.addHandler(handler)
-
 
 @click.command(help='Sync watched series episodes from Plex Media Server to MyShows.me')
 @click.option('--plex-url',
@@ -49,17 +49,18 @@ log.addHandler(handler)
 @click.option('--myshows-auth-code',
               required=False,
               help='MyShows.Me OAuth2 authorization code')
-@click.option('--myshows-token-path',
+@click.option('--work-dir',
               required=False,
-              help='MyShows.Me OAuth2 token store path')
+              default='/tmp',
+              help='Plex2Myshows store path')
 @click.option('--what-if',
               default=False,
               metavar='<boolean>',
               is_flag=True,
               help='No sync only show episodes')
-def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code, myshows_token_path, what_if):
+def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code, work_dir, what_if):
     try:
-        myshows = MyShows(myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code, myshows_token_path)
+        myshows = MyShows(myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code, work_dir)
     except Exception as exc:
         print(exc)
         log.error(exc)
@@ -75,8 +76,24 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url,
     plex = Plex(plex_instance)
     try:
         watched_episodes = plex.get_watched_episodes(plex_section)
+        myshows_series_id = {}
+
+        try:
+            with open('{}/series_cache'.format(work_dir), 'r') as cache_file:
+                series_cache = pickle.load(cache_file)
+        except IOError:
+            series_cache = []
+        series_cache_size = len(series_cache)
         for entry in watched_episodes:
-            series_id = myshows.get_series_id(entry.grandparentTitle, plex_instance.library.getByKey(entry.grandparentRatingKey).year)
+            if entry.ratingKey in series_cache:
+                continue
+            entry_key = (entry.grandparentTitle, plex_instance.library.getByKey(entry.grandparentRatingKey).year)
+            if entry_key not in myshows_series_id:
+                series_id = myshows.get_series_id(entry.grandparentTitle, plex_instance.library.getByKey(entry.grandparentRatingKey).year)
+                myshows_series_id.update({entry_key: series_id})
+            else:
+                series_id = myshows_series_id[entry_key]
+
             if series_id:
                 episode_id = myshows.get_episode_id(series_id, entry.parentIndex, entry.index)
 
@@ -103,6 +120,9 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url,
                                 log.info('{} season {} episode {} mark as watched'.format(info['series_title'],
                                                                                           info['season'],
                                                                                           info['episode']))
+                                series_cache.append(entry.ratingKey)
+                    else:
+                        series_cache.append(entry.ratingKey)
                 else:
                     print('{} season {} episode {} not found'.format(entry.grandparentTitle,
                                                                      entry.parentIndex,
@@ -114,6 +134,9 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url,
             else:
                 print('Series {} not found'.format(entry.grandparentTitle))
                 log.warning('Series {} not found'.format(entry.grandparentTitle))
+        if len(series_cache) != series_cache_size:
+            with open('{}/series_cache'.format(work_dir), 'w+') as cache_file:
+                pickle.dump(series_cache, cache_file)
 
     except Exception as exc:
         print(exc)
