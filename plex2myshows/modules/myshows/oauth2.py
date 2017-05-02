@@ -41,7 +41,7 @@ class OAuth2(object):
             token = {}
         keys = ('access_token', 'creation_at', 'expires_in', 'refresh_token')
         if all(key in token for key in keys):
-            if (datetime.now() - token['creation_at']).seconds < int(token['expires_in']):
+            if (datetime.now() - token['creation_at']).seconds < (int(token['expires_in']) - 600):
                 token = token['access_token']
             else:
                 token = self.__refresh_token_from_url(token['refresh_token'])
