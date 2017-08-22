@@ -19,6 +19,7 @@ formatter = logging.Formatter('%(name)s: [%(levelname)s] %(message)s')
 handler.formatter = formatter
 log.addHandler(handler)
 
+
 @click.command(help='Sync watched series episodes from Plex Media Server to MyShows.me')
 @click.option('--plex-url',
               metavar='<url>',
@@ -36,31 +37,26 @@ log.addHandler(handler)
               metavar='<url>',
               required=True,
               help='MyShows.Me APIv2 URL')
-@click.option('--myshows-oauth2-url',
-              metavar='<url>',
+@click.option('--myshows-username',
+              metavar='<username>',
               required=True,
-              help='MyShows.Me OAuth2. Path "/oauth/authorize" and "/oauth/token" will add to url automatic.')
-@click.option('--myshows-client-id',
+              help='MyShows.Me username')
+@click.option('--myshows-password',
+              metavar='<password>',
               required=True,
-              help='MyShows.Me OAuth2 client id')
-@click.option('--myshows-client-secret',
-              required=True,
-              help='MyShows.Me OAuth2 client secret')
-@click.option('--myshows-auth-code',
-              required=False,
-              help='MyShows.Me OAuth2 authorization code')
-@click.option('--work-dir',
+              help='MyShows.Me password')
+@click.option('--cache-dir',
               required=False,
               default='/tmp',
-              help='Plex2Myshows store path')
+              help='Plex2Myshows cache directory path')
 @click.option('--what-if',
               default=False,
               metavar='<boolean>',
               is_flag=True,
               help='No sync only show episodes')
-def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code, work_dir, what_if):
+def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_username, myshows_password, cache_dir, what_if):
     try:
-        myshows = MyShows(myshows_api_url, myshows_oauth2_url, myshows_client_id, myshows_client_secret, myshows_auth_code, work_dir)
+        myshows = MyShows(myshows_api_url, myshows_username, myshows_password)
     except Exception as exc:
         print(exc)
         log.error(exc)
@@ -79,7 +75,7 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url,
         myshows_series_id = {}
 
         try:
-            with open('{}/series_cache'.format(work_dir), 'r') as cache_file:
+            with open('{}/series_cache'.format(cache_dir), 'r') as cache_file:
                 series_cache = pickle.load(cache_file)
         except IOError:
             series_cache = []
@@ -87,28 +83,29 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url,
         for entry in watched_episodes:
             if entry.ratingKey in series_cache:
                 continue
-            entry_key = (entry.grandparentTitle, plex_instance.library.getByKey(entry.grandparentRatingKey).year)
+            entry_key = (entry.grandparentTitle, plex_instance.fetchItem(entry.grandparentRatingKey).year)
             if entry_key not in myshows_series_id:
-                series_id = myshows.get_series_id(entry.grandparentTitle, plex_instance.library.getByKey(entry.grandparentRatingKey).year)
+                series_id = myshows.get_series_id(entry.grandparentTitle, plex_instance.fetchItem(entry.grandparentRatingKey).year)
+
                 myshows_series_id.update({entry_key: series_id})
             else:
                 series_id = myshows_series_id[entry_key]
 
             if series_id:
                 episode_id = myshows.get_episode_id(series_id, entry.parentIndex, entry.index)
-
                 if episode_id:
                     myshows_watched_episodes = myshows.get_watched_episodes_id(series_id)
                     if not myshows_watched_episodes or episode_id not in myshows_watched_episodes:
+
                         info = myshows.get_episode_info(episode_id)
                         if what_if:
                             if info:
-                                print('{} season {} episode {} will mark as watched'.format(info['series_title'],
-                                                                                            info['season'],
-                                                                                            info['episode']))
-                                log.info('{} season {} episode {} will mark as watched'.format(info['series_title'],
-                                                                                               info['season'],
-                                                                                               info['episode']))
+                                print('{} season {} episode {} will be marked as watched'.format(info['series_title'],
+                                                                                                 info['season'],
+                                                                                                 info['episode']))
+                                log.info('{} season {} episode {} will be marked as watched'.format(info['series_title'],
+                                                                                                    info['season'],
+                                                                                                    info['episode']))
                             else:
                                 print('Episode with id {} not found'.format(episode_id))
                                 log.warning('Episode with id {} not found'.format(episode_id))
@@ -135,7 +132,7 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_oauth2_url,
                 print('Series {} not found'.format(entry.grandparentTitle))
                 log.warning('Series {} not found'.format(entry.grandparentTitle))
         if len(series_cache) != series_cache_size:
-            with open('{}/series_cache'.format(work_dir), 'w+') as cache_file:
+            with open('{}/series_cache'.format(cache_dir), 'w+') as cache_file:
                 pickle.dump(series_cache, cache_file)
 
     except Exception as exc:
