@@ -1,6 +1,6 @@
 import requests
 import hashlib
-from .exceptions import APIError, AuthError
+from .exceptions import AuthError, APIError, ResponseParseError
 
 
 class MyShows(object):
@@ -26,11 +26,10 @@ class MyShows(object):
 
         if response.status_code != requests.codes.ok:
             raise APIError('[API error] {}'.format(response.status_code))
-
         try:
             parsed = response.json()
         except ValueError as value_error:
-            raise APIError('[API error] Cannot deserialize response body', value_error)
+            raise ResponseParseError('[Response Parse Error] Cannot deserialize response body', value_error)
         return parsed
 
     def get_series_id(self, title, year):
@@ -101,6 +100,9 @@ class MyShows(object):
     def mark_episode_as_watch(self, episode_id):
         try:
             self.__send_request('profile/episodes/check/{}'.format(episode_id))
-        except:
+        except APIError:
             return False
-        return True
+        except ResponseParseError:
+            return True
+        else:
+            return True
