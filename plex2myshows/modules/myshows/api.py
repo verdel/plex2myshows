@@ -41,6 +41,7 @@ class MyShows(object):
         if len(series) == 1:
             series_id = series.values()[0]['id']
         elif len(series) > 1:
+            series_id = None
             for item in series.values():
                 if item['title']:
                     item['title'] = item['title'].lower()
@@ -49,6 +50,7 @@ class MyShows(object):
 
                 if (item['title'] == title.lower() or item['ruTitle'] == title.lower()) and item['year'] == year:
                     series_id = item['id']
+                    break
         else:
             return None
 
