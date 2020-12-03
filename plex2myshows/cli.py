@@ -6,8 +6,8 @@ import pickle
 import logging
 import logging.handlers
 from plexapi.server import PlexServer
-from modules.plex import Plex
-from modules.myshows import MyShows
+from plex2myshows.modules.plex import Plex
+from plex2myshows.modules.myshows import MyShows
 
 log = logging.getLogger('plex2myshows')
 log.setLevel(logging.INFO)
@@ -64,7 +64,7 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_username, m
 
     try:
         plex_instance = PlexServer(plex_url, plex_token)
-    except:
+    except Exception as exc:
         print('No Plex Media Server found at {}'.format(plex_url))
         log.error(exc)
         sys.exit(1)
@@ -75,28 +75,30 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_username, m
         myshows_series_id = {}
 
         try:
-            with open('{}/series_cache'.format(cache_dir), 'r') as cache_file:
+            with open('{}/series_cache'.format(cache_dir), 'rb') as cache_file:
                 series_cache = pickle.load(cache_file)
-        except IOError:
+        except EOFError:
             series_cache = []
         series_cache_size = len(series_cache)
         for entry in watched_episodes:
             if entry.ratingKey in series_cache:
                 continue
-            entry_key = (entry.grandparentTitle, plex_instance.fetchItem(entry.grandparentRatingKey).year)
+            entry_key = (entry.grandparentTitle, plex_instance.fetchItem(
+                entry.grandparentRatingKey).year)
             if entry_key not in myshows_series_id:
-                series_id = myshows.get_series_id(entry.grandparentTitle, plex_instance.fetchItem(entry.grandparentRatingKey).year)
-
+                series_id = myshows.get_series_id(
+                    entry.grandparentTitle, plex_instance.fetchItem(entry.grandparentRatingKey).year)
                 myshows_series_id.update({entry_key: series_id})
             else:
                 series_id = myshows_series_id[entry_key]
 
             if series_id:
-                episode_id = myshows.get_episode_id(series_id, entry.parentIndex, entry.index)
+                episode_id = myshows.get_episode_id(
+                    series_id, entry.parentIndex, entry.index)
                 if episode_id:
-                    myshows_watched_episodes = myshows.get_watched_episodes_id(series_id)
+                    myshows_watched_episodes = myshows.get_watched_episodes_id(
+                        series_id)
                     if not myshows_watched_episodes or episode_id not in myshows_watched_episodes:
-
                         info = myshows.get_episode_info(episode_id)
                         if what_if:
                             if info:
@@ -107,8 +109,10 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_username, m
                                                                                                     info['season'],
                                                                                                     info['episode']))
                             else:
-                                print('Episode with id {} not found'.format(episode_id))
-                                log.warning('Episode with id {} not found'.format(episode_id))
+                                print(
+                                    'Episode with id {} not found'.format(episode_id))
+                                log.warning(
+                                    'Episode with id {} not found'.format(episode_id))
                         else:
                             if myshows.mark_episode_as_watch(episode_id):
                                 print('{} season {} episode {} mark as watched'.format(info['series_title'],
@@ -130,9 +134,10 @@ def cli(plex_url, plex_token, plex_section, myshows_api_url, myshows_username, m
 
             else:
                 print('Series {} not found'.format(entry.grandparentTitle))
-                log.warning('Series {} not found'.format(entry.grandparentTitle))
+                log.warning('Series {} not found'.format(
+                    entry.grandparentTitle))
         if len(series_cache) != series_cache_size:
-            with open('{}/series_cache'.format(cache_dir), 'w+') as cache_file:
+            with open('{}/series_cache'.format(cache_dir), 'wb+') as cache_file:
                 pickle.dump(series_cache, cache_file)
 
     except Exception as exc:

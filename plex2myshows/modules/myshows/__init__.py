@@ -1,1 +1,1 @@
-from api import MyShows
+from .api import MyShows

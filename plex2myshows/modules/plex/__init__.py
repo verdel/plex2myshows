@@ -1,1 +1,1 @@
-from plex import Plex
+from .plex import Plex
