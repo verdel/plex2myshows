@@ -11,25 +11,29 @@ class MyShows(object):
     def __auth(self, username, password):
         api = requests.get('{}/profile/login'.format(self.api_url),
                            params={'login': username,
-                                   'password': hashlib.md5(password).hexdigest()})
+                                   'password': hashlib.md5(password.encode('utf-8')).hexdigest()})
         if api.status_code != 200:
-            raise AuthError('[Myshows.me auth error] Invalid username or password.')
+            raise AuthError(
+                '[Myshows.me auth error] Invalid username or password.')
         else:
             return api.cookies
 
     def __send_request(self, method_path):
         """Issue the HTTP request to the server and return the method result (if not a notification)"""
         try:
-            response = requests.get('{}/{}'.format(self.api_url, method_path), cookies=self.cookie)
+            response = requests.get(
+                '{}/{}'.format(self.api_url, method_path), cookies=self.cookie)
         except requests.RequestException as requests_exception:
-            raise APIError('[API error] Error calling method {}'.format(method_path), requests_exception)
+            raise APIError('[API error] Error calling method {}'.format(
+                method_path), requests_exception)
 
         if response.status_code != requests.codes.ok:
             raise APIError('[API error] {}'.format(response.status_code))
         try:
             parsed = response.json()
         except ValueError as value_error:
-            raise ResponseParseError('[Response Parse Error] Cannot deserialize response body', value_error)
+            raise ResponseParseError(
+                '[Response Parse Error] Cannot deserialize response body', value_error)
         return parsed
 
     def get_series_id(self, title, year):
@@ -39,7 +43,7 @@ class MyShows(object):
             return None
 
         if len(series) == 1:
-            series_id = series.values()[0]['id']
+            series_id = next(iter(series.values()))['id']
         elif len(series) > 1:
             series_id = None
             for item in series.values():
@@ -80,7 +84,8 @@ class MyShows(object):
 
     def get_watched_episodes_id(self, series_id):
         try:
-            watched_episodes = self.__send_request('profile/shows/{}/'.format(series_id))
+            watched_episodes = self.__send_request(
+                'profile/shows/{}/'.format(series_id))
         except:
             return None
         if len(watched_episodes) > 0:
@@ -90,7 +95,8 @@ class MyShows(object):
 
     def get_episode_info(self, episode_id):
         try:
-            episode_info = self.__send_request('episodes/{}'.format(episode_id))
+            episode_info = self.__send_request(
+                'episodes/{}'.format(episode_id))
         except:
             return None
         episode_season_number = episode_info['seasonNumber']
